@@ -1,0 +1,17 @@
+{
+  "name": "bokuyabadownloader-bot",
+  "version": "1.0.0",
+  "description": "Discord bot that downloads and unscrambles images from Bokuyaba comic viewer URLs",
+  "main": "bot.js",
+  "scripts": {
+    "start": "node bot.js",
+    "dev": "node bot.js"
+  },
+  "keywords": ["discord", "bot", "bokuyaba", "comic", "downloader"],
+  "author": "",
+  "license": "ISC"
+  "dependencies": {
+    "discord.js": "^14.22.1",
+    "dotenv": "^17.2.3"
+  }
+}
