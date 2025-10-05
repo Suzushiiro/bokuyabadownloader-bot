@@ -1,6 +1,5 @@
 require('dotenv').config();
 const { Client, GatewayIntentBits, SlashCommandBuilder, AttachmentBuilder, EmbedBuilder, ThreadAutoArchiveDuration } = require('discord.js');
-const { spawn } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 const downloader = require("./bokuyabadownloader-url");
@@ -72,16 +71,36 @@ client.on('interactionCreate', async interaction => {
         const url = interaction.options.getString('url');
         
         // Validate URL format (basic check)
-        if (!url.includes('championcross.jp')) {
+        if (!url.includes('//championcross.jp/episodes/')) {
             await interaction.reply('❌ Please provide a valid championcross.jp viewer URL.');
             return;
         }
+
         
+        
+         
+        
+        var title = "";
+        //check title
+        try {
+            title = await downloader.GetChapterTitle(url);
+
+            if(!title.includes("Karte") && !title.includes("Score")) //All BokuYaba chapter titles contain "Karte," all OneYaba chapter titles contain "Score"
+            {
+                throw new Error();
+            } 
+        }
+        catch {
+            await interaction.reply('❌ Not a valid BokuYaba or OneYaba chapter URL.');
+            return;
+        }
+
         // Defer the reply since this will take time
         await interaction.deferReply();
         
         
         try {
+            
             
             const embed = new EmbedBuilder()
                 .setColor(0x0099FF)
@@ -92,7 +111,6 @@ client.on('interactionCreate', async interaction => {
             await interaction.editReply({ embeds: [embed] });
             
             // Download files
-            const title = await downloader.GetChapterTitle(url);
 
             
             const gid = interaction.guildId;

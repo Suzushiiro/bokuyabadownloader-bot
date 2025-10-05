@@ -191,6 +191,7 @@ async function GetChapterTitle(comicUrl)
 {
         const comicPage = await makeRequest(comicUrl);
         const dom = new JSDOM(comicPage);
+        const comicId = dom.window.document.getElementById('comici-viewer').getAttribute('comici-viewer-id'); //this is to deliberately throw an error if the chapter isn't public
         title = dom.window.document.getElementById('wait_free_article_title').innerHTML;
         title = title.replace(/[^A-Za-z0-9\s]/g, '').replace(/[^\x00-\x7F]/g, "").trimEnd();
         return title;
