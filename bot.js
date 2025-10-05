@@ -1,8 +1,9 @@
 require('dotenv').config();
-const { Client, GatewayIntentBits, SlashCommandBuilder, AttachmentBuilder, EmbedBuilder } = require('discord.js');
+const { Client, GatewayIntentBits, SlashCommandBuilder, AttachmentBuilder, EmbedBuilder, ThreadAutoArchiveDuration } = require('discord.js');
 const { spawn } = require('child_process');
 const fs = require('fs');
 const path = require('path');
+const downloader = require("./bokuyabadownloader-url");
 
 // Create a new client instance
 const client = new Client({
@@ -13,46 +14,11 @@ const client = new Client({
     ]
 });
 
-// Path to the bokuyabadownloader script
-const SCRIPT_PATH = 'C:\\Users\\ptand\\OneDrive\\Documents\\code\\bokuyabadownloader-url.js';
-
-// Function to run the bokuyabadownloader script
-async function runBokuyabaDownloader(url) {
-    return new Promise((resolve, reject) => {
-        const process = spawn('node', [SCRIPT_PATH, url], {
-            cwd: './temp', // Run in temp directory to contain downloaded files
-            stdio: 'pipe'
-        });
-        
-        let stdout = '';
-        let stderr = '';
-        
-        process.stdout.on('data', (data) => {
-            stdout += data.toString();
-        });
-        
-        process.stderr.on('data', (data) => {
-            stderr += data.toString();
-        });
-        
-        process.on('close', (code) => {
-            if (code === 0) {
-                resolve({ stdout, stderr });
-            } else {
-                reject(new Error(`Process exited with code ${code}. Error: ${stderr}`));
-            }
-        });
-        
-        process.on('error', (error) => {
-            reject(error);
-        });
-    });
-}
 
 // Function to get downloaded image files
-function getDownloadedImages(tempDir) {
+function getDownloadedImages(title) {
     try {
-        const files = fs.readdirSync(tempDir);
+        const files = fs.readdirSync(title);
         return files.filter(file => file.endsWith('.png') && /^\d+\.png$/.test(file))
                    .sort((a, b) => {
                        const numA = parseInt(a.split('.')[0]);
@@ -65,18 +31,6 @@ function getDownloadedImages(tempDir) {
     }
 }
 
-// Function to clean up temporary files
-function cleanupTempFiles(tempDir) {
-    try {
-        const files = fs.readdirSync(tempDir);
-        files.forEach(file => {
-            fs.unlinkSync(path.join(tempDir, file));
-        });
-        console.log('Cleaned up temporary files');
-    } catch (error) {
-        console.error('Error cleaning up temp files:', error);
-    }
-}
 
 // When the client is ready, run this code (only once)
 client.once('ready', async () => {
@@ -90,8 +44,8 @@ client.once('ready', async () => {
     // Register slash commands
     const commands = [
         new SlashCommandBuilder()
-            .setName('download')
-            .setDescription('Download images from a bokuyaba viewer URL')
+            .setName('downloadyabachapter')
+            .setDescription('Download images from a Championcross BokuYaba/OneYaba chapter URL')
             .addStringOption(option =>
                 option.setName('url')
                     .setDescription('The viewer URL to download from')
@@ -110,9 +64,11 @@ client.once('ready', async () => {
 
 // Handle slash command interactions
 client.on('interactionCreate', async interaction => {
+
+    
     if (!interaction.isChatInputCommand()) return;
     
-    if (interaction.commandName === 'download') {
+    if (interaction.commandName === 'downloadyabachapter') {
         const url = interaction.options.getString('url');
         
         // Validate URL format (basic check)
@@ -124,11 +80,8 @@ client.on('interactionCreate', async interaction => {
         // Defer the reply since this will take time
         await interaction.deferReply();
         
-        const tempDir = './temp';
         
         try {
-            // Clean up any existing files in temp directory
-            cleanupTempFiles(tempDir);
             
             const embed = new EmbedBuilder()
                 .setColor(0x0099FF)
@@ -138,10 +91,36 @@ client.on('interactionCreate', async interaction => {
             
             await interaction.editReply({ embeds: [embed] });
             
-            // Run the bokuyabadownloader script
-            console.log(`Running script for URL: ${url}`);
-            const result = await runBokuyabaDownloader(url);
+            // Download files
+            const title = await downloader.GetChapterTitle(url);
+
             
+            const gid = interaction.guildId;
+            const guild = await client.guilds.fetch(gid);
+            const channel = await guild.channels.cache.find(channel => channel.name === 'raw-dumps');
+            
+            if(channel.threads.cache.find(x => x.name === title)) //if the thread already exists just point them to it
+            {
+                var t = channel.threads.cache.find(x => x.name === title);
+                var Embed = new EmbedBuilder()
+                    .setColor(0x00FF00)
+                    .setTitle(`Chapter already downloaded`)
+                    .setDescription(`${title} is posted at <#${t.id}>`)
+                    .setTimestamp();
+                await interaction.editReply({ 
+                            embeds: [Embed]
+                        });
+                return;
+            }
+
+            await downloader.DownloadChapter(url);
+
+            const thread = await channel.threads.create({
+                name: title,
+                ThreadAutoArchiveDuration: ThreadAutoArchiveDuration.OneWeek
+            });
+            
+            const tempDir = `./${title}`;
             // Get the downloaded images
             const imageFiles = getDownloadedImages(tempDir);
             
@@ -152,11 +131,12 @@ client.on('interactionCreate', async interaction => {
             
             // Discord has a limit of 10 files per message and 25MB total
             // We'll send images in batches if needed
-            const maxFilesPerMessage = 10;
+            const maxFilesPerMessage = 8;
             const maxFileSizeMB = 8; // Conservative limit per file
             
             let currentBatch = [];
             let batchNumber = 1;
+
             
             for (const imageFile of imageFiles) {
                 const filePath = path.join(tempDir, imageFile);
@@ -175,30 +155,28 @@ client.on('interactionCreate', async interaction => {
                     const attachments = currentBatch.map(fileName => 
                         new AttachmentBuilder(path.join(tempDir, fileName))
                     );
-                    
-                    const batchEmbed = new EmbedBuilder()
-                        .setColor(0x00FF00)
-                        .setTitle(`✅ Download Complete ${imageFiles.length > maxFilesPerMessage ? `(Batch ${batchNumber})` : ''}`)
-                        .setDescription(`Successfully downloaded ${currentBatch.length} image(s)`)
-                        .setFooter({ text: `Total images: ${imageFiles.length}` })
-                        .setTimestamp();
-                    
-                    if (batchNumber === 1) {
-                        await interaction.editReply({ 
-                            embeds: [batchEmbed], 
-                            files: attachments 
-                        });
-                    } else {
-                        await interaction.followUp({ 
-                            embeds: [batchEmbed], 
-                            files: attachments 
-                        });
-                    }
+                    await thread.send({ content: `${title} batch ${batchNumber}`, files: attachments});
                     
                     currentBatch = [];
                     batchNumber++;
                 }
+
             }
+                //update embed to point to thread
+                var Embed = new EmbedBuilder()
+                    .setColor(0x00FF00)
+                    .setTitle(`✅ Download Complete`)
+                    .setDescription(`Successfully downloaded ${imageFiles.length} image(s) in ${title} and posted to <#${thread.id}>`)
+                    .setFooter({ text: `Total images: ${imageFiles.length}` })
+                    .setTimestamp();
+                await interaction.editReply({ 
+                            embeds: [Embed]
+                        });
+                thread.setLocked(true);
+
+                //clean up files
+                downloader.DeleteChapter(title);
+
             
         } catch (error) {
             console.error('Error processing request:', error);
@@ -210,12 +188,7 @@ client.on('interactionCreate', async interaction => {
                 .setTimestamp();
             
             await interaction.editReply({ embeds: [errorEmbed] });
-        } finally {
-            // Clean up temporary files after a delay
-            setTimeout(() => {
-                cleanupTempFiles(tempDir);
-            }, 5000);
-        }
+        } 
     }
 });
 

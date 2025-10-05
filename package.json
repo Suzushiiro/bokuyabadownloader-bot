@@ -7,11 +7,18 @@
     "start": "node bot.js",
     "dev": "node bot.js"
   },
-  "keywords": ["discord", "bot", "bokuyaba", "comic", "downloader"],
+  "keywords": [
+    "discord",
+    "bot",
+    "bokuyaba",
+    "comic",
+    "downloader"
+  ],
   "author": "",
-  "license": "ISC"
+  "license": "ISC",
   "dependencies": {
     "discord.js": "^14.22.1",
-    "dotenv": "^17.2.3"
+    "dotenv": "^17.2.3",
+    "ffmpeg-static": "^5.2.0"
   }
 }
