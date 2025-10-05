@@ -27,7 +27,6 @@ A Discord bot that downloads and unscrambles images from Championcross comic vie
    ```
    /downloadyabachapter url:https://championcross.jp/viewer/...
    ```
-
  
 ## License
 
